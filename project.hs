@@ -3,7 +3,7 @@ import Data.Char
 import qualified Data.Text as DT
 
 main = do
-	handle <- openFile "D:/Studia/SPOP/input.txt" ReadMode
+	handle <- openFile "D:/Studia/SPOP/architect-puzzle/simpleInput.txt" ReadMode
 	input <- hGetContents handle
 	checkInputLength input
 	let 
@@ -119,4 +119,48 @@ replaceAtN (x:list) index value = x : (replaceAtN list (index-1) value)
 solvePuzzle :: ExecutionContext -- kontekst zagadki
 		-> [[Int]] 				-- rozwi¹zania
 solvePuzzle context =
-		[[0, 0]]
+			let 
+				boards = addGas (sum (rowValues context)) (initialBoard context) in
+					boards
+
+-- dzieli zadan¹ planszê na listê wierszy (ka¿dy wiersz jest list¹ wartoœci)
+splitToRows :: [Int] -- plansza
+				-> Int -- rozmiar wiersza (liczba kolumn)
+				-> [[Int]] -- lista wierszy
+splitToRows board columnCount = if length board == columnCount 
+									then [board]
+									else [take columnCount board] ++ (splitToRows (drop columnCount board) columnCount)
+					
+addGas :: Int
+		-> [Int]
+		-> [[Int]]
+addGas 0 board = [board]
+addGas _ [] = []
+addGas gasCount board = if countEmpty board < gasCount
+						then []
+						else if checkFirst board 0
+							then combine 2 (addGas (gasCount - 1) (drop 1 board)) ++ combine 0 (addGas gasCount (drop 1 board))
+							else combine (head board) (addGas gasCount (drop 1 board))
+
+-- sprawdza czy pierwszy element listy jest rowny zadanej wartoœci							
+checkFirst :: [Int] -- lista
+			-> Int -- zadana wartoœæ
+			-> Bool -- wynik operacji
+checkFirst [] _ = False
+checkFirst (x:xs) z 
+			| x == z = True
+			| otherwise = False
+
+-- ³¹czy zadan¹ wartoœæ  z ka¿d¹ list¹ przekazan¹ w drugim parametrze
+combine :: Int -- wartoœæ
+			-> [[Int]] -- lista list 
+			-> [[Int]] -- wynikowa lista
+combine _ [] = []
+combine value (x:xs) = [(value:x)] ++ (combine value xs) 
+
+-- liczy wyst¹pienia 0 w liœcie								
+countEmpty :: [Int] -- lista
+			-> Int -- liczba wyst¹pieñ 0
+countEmpty [] = 0
+countEmpty (0:xs) = 1 + countEmpty xs
+countEmpty (x:xs) = countEmpty xs 
