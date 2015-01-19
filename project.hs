@@ -167,13 +167,13 @@ splitCols ([]:_) = []
 splitCols list =
 			[map head list] ++ splitCols (map tail list)
 			
-
-addGas :: Int
-		-> [Int]
-		-> [[Int]]
+-- dodaje przy³¹cza gazowe do planszy generuj¹c listê wszystkich mo¿liwych rozmieszczeñ
+addGas :: Int 			-- liczba przy³¹czy gazowych
+		-> [Int] 		-- plansza
+		-> [[Int]] 		-- lista plansz z rozmieszczonymi przy³¹czami
 addGas 0 board = [board]
 addGas _ [] = []
-addGas gasCount board = if countEmpty board < gasCount
+addGas gasCount board = if countNumInList board 0 < gasCount
 						then []
 						else if checkFirst board 0
 							then combine 2 (addGas (gasCount - 1) (drop 1 board)) ++ combine 0 (addGas gasCount (drop 1 board))
@@ -194,13 +194,6 @@ combine :: Int 			-- wartoœæ
 			-> [[Int]] 	-- wynikowa lista
 combine _ [] = []
 combine value (x:xs) = [(value:x)] ++ (combine value xs) 
-
--- liczy wyst¹pienia 0 w liœcie								
-countEmpty :: [Int] 	-- lista
-			-> Int 		-- liczba wyst¹pieñ 0
-countEmpty [] = 0
-countEmpty (0:xs) = 1 + countEmpty xs
-countEmpty (x:xs) = countEmpty xs 
 
 -- liczy wystapienia zadanej liczby w liscie
 countNumInList :: [Int]		-- lista Intow
@@ -235,6 +228,8 @@ filterSolutions solutions rowValues columnValues housesPositions =
 filterNumberOfHousesAndGasTanks :: [[Int]] 		-- rozwiazania
 		-> Int									-- ilosc domow
 		-> [[Int]]								-- RETURN przefiltrowane rozwiazania
+filterNumberOfHousesAndGasTanks [] _ = 
+			[]
 filterNumberOfHousesAndGasTanks [sol] housesNo =
 			if (sum(sol) == 3 * housesNo)
 			then [sol]
@@ -246,6 +241,8 @@ filterNumberOfHousesAndGasTanks (s:rest) housesNo =
 filterRowsNumbersMatch :: [[Int]]	-- lista wygenerowanych rozwiazan
 		-> [Int]					-- lista liczb z lewej strony planszy
 		-> [[Int]]					-- RETURN rozwiazania po przefiltrowaniu
+filterRowsNumbersMatch [] _ =
+			[]
 filterRowsNumbersMatch [s] nums =
 			if(checkRowsOrCols (splitToRows s (length nums)) nums)
 			then [s]
@@ -267,6 +264,8 @@ checkRowsOrCols (row:rows) (num:nums) =
 filterColsNumbersMatch :: [[Int]]	-- lista wygenerowanych rozwiazan
 		-> [Int]					-- lista liczb nad plansza
 		-> [[Int]]					-- RETURN rozwiazania po przefiltrowaniu
+filterColsNumbersMatch [] _ =
+		[]
 filterColsNumbersMatch [s] nums =
 		if(checkRowsOrCols (splitToCols s (length nums)) nums)
 		then [s]
@@ -279,6 +278,8 @@ filterGasNextToHouses :: [[Int]]	-- lista wygenerowanych rozwiazan
 		-> [(Int, Int)]				-- lista polozen domow
 		-> [Int]					-- liczby z lewej strony planszy
 		-> [[Int]]					-- RETURN rozwiazania po przefiltrowaniu
+filterGasNextToHouses [] _ _ = 
+		[]
 filterGasNextToHouses [s] houses rows =
 		if(gasNextToHouses (splitToRows s (length rows)) houses)
 		then [s]
@@ -342,6 +343,8 @@ above (x,y) rows size =
 filterGasNotNextToEachOther :: [[Int]] 	-- plansze z rozwiazaniami
 		-> Int 							-- rozmiar planszy
 		-> [[Int]]						-- plansze po przefiltrowaniu (spelniajace warunek nie stykania sie przylaczy)
+filterGasNotNextToEachOther [] _ =
+							[]
 filterGasNotNextToEachOther [s] size=
 		if(gasNotNextToEachOther s s size 0)
 		then [s]
