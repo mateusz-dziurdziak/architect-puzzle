@@ -3,7 +3,9 @@ import Data.Char
 import qualified Data.Text as DT
 
 main = do
-	handle <- openFile "D:/Studia/SPOP/architect-puzzle/simpleInput.txt" ReadMode
+	putStrLn "Please define input file to load:" 
+	filename <- getLine
+	handle <- openFile filename ReadMode
 	input <- hGetContents handle
 	checkInputLength input
 	let 
@@ -17,8 +19,11 @@ main = do
 		columnCount = length(columnValues)
 		initialBoard = buildInitialBoard rowCount columnCount housesPositions 
 		executionContext = ExecutionContext rowCount columnCount rowValues columnValues housesPositions initialBoard in
-			print (solvePuzzle executionContext)
-
+			printFinalSolution (filterSolutions(solvePuzzle executionContext) rowValues columnValues housesPositions) (length rowValues)
+			
+printFinalSolution :: [Int] -> Int -> IO ()
+printFinalSolution xs size = print (splitToRows xs size)
+		
 -- funkcja sprawdzaj¹ca czy odczytany plik sk³ada siê z 3 linii
 checkInputLength :: String 		-- ³añcuch znaków odczytany z pliku (ca³y)
 					-> IO () 	-- wartoœæ zwracana (ignorowane)
@@ -114,8 +119,13 @@ replaceAtN :: [Int] -- lista
 			-> [Int] -- wynikowa lista
 replaceAtN (x:list) 0 value = value:list
 replaceAtN (x:list) index value = x : (replaceAtN list (index-1) value)
-					
+
 -- rozwi¹zuje zagadkê architekta
+-- konwencja:
+--		0 - puste
+--		1 - dom
+--		2 - przylacze
+--
 solvePuzzle :: ExecutionContext -- kontekst zagadki
 		-> [[Int]] 				-- rozwi¹zania
 solvePuzzle context =
@@ -130,7 +140,20 @@ splitToRows :: [Int] -- plansza
 splitToRows board columnCount = if length board == columnCount 
 									then [board]
 									else [take columnCount board] ++ (splitToRows (drop columnCount board) columnCount)
-					
+									
+-- dzieli zadana plansze na liste kolumn (kazda kolumna to lista wartosci)
+splitToCols :: [Int] 		-- plansza
+				-> Int 		-- rozmiar kolumny (liczba wierszy)
+				-> [[Int]]	-- lista kolumn
+splitToCols board rowCount = 
+			 splitCols (splitToRows board rowCount)
+			
+splitCols :: [[Int]] -> [[Int]]
+splitCols ([]:_) = []
+splitCols list =
+			[map head list] ++ splitCols (map tail list)
+			
+			
 addGas :: Int
 		-> [Int]
 		-> [[Int]]
@@ -164,3 +187,220 @@ countEmpty :: [Int] -- lista
 countEmpty [] = 0
 countEmpty (0:xs) = 1 + countEmpty xs
 countEmpty (x:xs) = countEmpty xs 
+
+-- liczy wystapienia zadanej liczby w liscie
+countNumInList :: [Int]		-- lista Intow
+			-> Int			-- liczba ktorej wystapienia zliczamy
+			-> Int			-- liczba wystapien zliczanej liczby
+
+countNumInList [] _ = 0
+countNumInList (x:xs) a = 
+			if (x == a)
+			then 1 + countNumInList xs a
+			else 0 + countNumInList xs a
+
+-------------------------------------------------------------------------------------
+-- filtruje wygenerowane rozwiazania w poszukiwaniu takiego, ktore spelnia zalozenia.
+filterSolutions :: [[Int]] 	-- lista wygenerowanych rozwiazan
+		-> [Int]			-- lista liczb z lewej strony planszy
+		-> [Int]			-- lista liczb nad plansza
+		-> [(Int, Int)]		-- pozycje domow
+		-> [Int]			-- RETURN jedyne sluszne rozwiazanie
+filterSolutions solutions rowValues columnValues housesPositions =
+			let
+			newSols = filterNumberOfHousesAndGasTanks solutions (length housesPositions) 
+			newSols2 = filterRowsNumbersMatch newSols rowValues
+			newSols3 = filterColsNumbersMatch newSols2 columnValues
+			newSols4 = filterGasNextToHouses newSols3 housesPositions rowValues 
+			newSols5 = filterGasNotNextToEachOther newSols4 (length rowValues) in
+				head newSols5
+
+-- filtruje rozwiazania sprawdzajac czy ilosc domow jest taka jak ilosc zbiornikow z gazem
+filterNumberOfHousesAndGasTanks :: [[Int]] 		-- rozwiazania
+		-> Int									-- ilosc domow
+		-> [[Int]]								-- RETURN przefiltrowane rozwiazania
+filterNumberOfHousesAndGasTanks [sol] housesNo =
+			if (sum(sol) == 3 * housesNo)
+			then [sol]
+			else []
+filterNumberOfHousesAndGasTanks (s:rest) housesNo = 
+			(filterNumberOfHousesAndGasTanks [s] housesNo) ++ (filterNumberOfHousesAndGasTanks rest housesNo)
+			
+-- filtruje rozwiazania sprawdzajac czy ilosc przylaczy w wierszach jest zgodna z liczbami z lewej strony planszy
+filterRowsNumbersMatch :: [[Int]]	-- lista wygenerowanych rozwiazan
+		-> [Int]					-- lista liczb z lewej strony planszy
+		-> [[Int]]					-- RETURN rozwiazania po przefiltrowaniu
+
+filterRowsNumbersMatch [s] nums =
+			if(checkRowsOrCols (splitToRows s (length nums)) nums)
+			then [s]
+			else []
+		
+filterRowsNumbersMatch (s:rest) nums =
+			(filterRowsNumbersMatch [s] nums) ++ (filterRowsNumbersMatch rest nums)
+			
+-- sprawdza warunek ze w wierszu lub kolumnie jest x przylaczy
+checkRowsOrCols :: [[Int]]	-- lista wierszy
+		-> [Int]			-- lista liczb z lewej strony planszy
+		-> Bool				-- czy jest ok
+
+checkRowsOrCols [] _ = True
+		
+checkRowsOrCols [row] [num] = 
+			(countNumInList row 2) == num
+
+checkRowsOrCols (row:rows) (num:nums) = 
+			checkRowsOrCols [row] [num] && checkRowsOrCols rows nums
+			
+-- filtruje rozwiazania sprawdzajac czy ilosc przylaczy w kolumnach jest zgodna z liczbami nad plansza
+filterColsNumbersMatch :: [[Int]]	-- lista wygenerowanych rozwiazan
+		-> [Int]					-- lista liczb nad plansza
+		-> [[Int]]					-- RETURN rozwiazania po przefiltrowaniu
+
+filterColsNumbersMatch [s] nums =
+		if(checkRowsOrCols (splitToCols s (length nums)) nums)
+		then [s]
+		else []
+
+filterColsNumbersMatch (s:rest) nums =
+			(filterColsNumbersMatch [s] nums) ++ (filterColsNumbersMatch rest nums)
+			
+-- filtruje rozwiazania sprawdzajac czy przy kazdym domu jest przylacze
+filterGasNextToHouses :: [[Int]]	-- lista wygenerowanych rozwiazan
+		-> [(Int, Int)]				-- lista polozen domow
+		-> [Int]					-- liczby z lewej strony planszy
+		-> [[Int]]					-- RETURN rozwiazania po przefiltrowaniu
+filterGasNextToHouses [s] houses rows =
+		if(gasNextToHouses (splitToRows s (length rows)) houses)
+		then [s]
+		else []
+
+filterGasNextToHouses (s:rest) houses rows =
+			(filterGasNextToHouses [s] houses rows) ++ (filterGasNextToHouses rest houses rows) 
+			
+gasNextToHouses :: [[Int]]	-- wiersze
+		-> [(Int, Int)]		-- lista domkow (polozen)
+		-> Bool				-- czy jest ok
+gasNextToHouses rows [] = True
+gasNextToHouses rows ((a,b):xs) = 
+			if( gasNextToHouse (a,b) rows (length rows) && gasNextToHouses rows xs)
+			then True
+			else False
+
+gasNextToHouse :: (Int, Int) -> [[Int]] -> Int -> Bool			
+gasNextToHouse (a,b) rows size =
+			if left (a,b) rows size || right (a,b) rows size || under (a,b) rows size || above (a,b) rows size
+			then True
+			else False
+			
+left (x,y) rows size = 
+	if(y-1 >= 0)
+	then if((rows !! x) !! (y-1) == 2)
+		then True
+		else False
+	else False
+	
+right (x,y) rows size = 
+	if(y+1 < size)
+	then if((rows !! x) !! (y+1) == 2)
+		then True
+		else False
+	else False
+	
+under (x,y) rows size = 
+	if(x-1 >= 0)
+	then if((rows !! (x-1)) !! y == 2)
+		then True
+		else False
+	else False
+
+above (x,y) rows size = 
+	if(x+1 < size)
+	then if((rows !! (x+1)) !! y == 2)
+		then True
+		else False
+	else False
+	
+-- filtruje rozwiazania, przy ktorych zbiorniki z gazem nie stykaja sie ze soba
+filterGasNotNextToEachOther :: [[Int]] -> Int -> [[Int]]
+filterGasNotNextToEachOther [s] size=
+		if(gasNotNextToEachOther s s size 0)
+		then [s]
+		else []
+
+filterGasNotNextToEachOther (s:rest) size =
+		(filterGasNotNextToEachOther [s] size) ++ (filterGasNotNextToEachOther rest size) 
+			
+gasNotNextToEachOther :: [Int] -> [Int] -> Int -> Int -> Bool
+gasNotNextToEachOther [] _ _ _ = True
+gasNotNextToEachOther (x:xs) s size ind =
+		if(x == 2)
+		then if (leftGas ind s size || rightGas ind s size || underGas ind s size || aboveGas ind s size || leftUpperGas ind s size || rightUpperGas ind s size || leftLowerGas ind s size || rightLowerGas ind s size)
+			then False
+			else gasNotNextToEachOther xs s size (ind+1)
+		else gasNotNextToEachOther xs s size (ind+1)
+			
+leftGas ind board size =
+		if(ind `mod` size == 0)
+		then False
+		else if (board !! (ind -1) == 2)
+			then True
+			else False
+		--else False
+		
+rightGas ind board size =
+		if(ind `mod` size == (size - 1))
+		then False
+		else if (board !! (ind + 1) == 2)
+			then True
+			else False
+		--else False
+
+underGas :: Int -> [Int] -> Int -> Bool
+underGas ind board size =
+		if(floor (fromIntegral (ind `div` size) :: Double) == (size - 1))
+		then False
+		else if ( board !! (ind + size) == 2)
+			then True
+			else False
+		--else False
+			
+aboveGas ind board size =
+		if(floor (fromIntegral (ind `div` size) :: Double) == 0)
+		then False
+		else if ( board !! (ind - size) == 2)
+			then True
+			else False
+		--else False
+			
+leftUpperGas ind board size =
+		if((floor (fromIntegral (ind `div` size) :: Double) == 0) || (ind `mod` size == 0))
+		then False
+		else if ((board !! (ind - size - 1)) == 2)
+			then True
+			else False
+		--else False
+			
+rightUpperGas ind board size =
+		if((floor (fromIntegral (ind `div` size) :: Double) == 0) || (ind `mod` size == size - 1))
+		then False
+		else if ((board !! (ind - size + 1)) == 2)
+			then True
+			else False
+		--else False
+			
+leftLowerGas ind board size =
+		if((floor (fromIntegral (ind `div` size) :: Double) == size - 1) || (ind `mod` size == 0))
+		then False
+		else if ((board !! (ind + size - 1)) == 2)
+			then True
+			else False
+		--else False
+			
+rightLowerGas ind board size =
+		if((floor (fromIntegral (ind `div` size) :: Double) == size - 1) || (ind `mod` size == size - 1))
+		then False
+		else if ((board !! (ind + size + 1)) == 2)
+			then True
+			else False
+		--else False
